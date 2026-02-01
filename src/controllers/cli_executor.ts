@@ -6,13 +6,24 @@ export type CliResult = {
   exitCode: number;
 };
 
+export type CliAgentType = "claude" | "codex" | "gemini" | "opencode";
+
+const cliConfigs: Record<CliAgentType, { args: string[] }> = {
+  claude:   { args: ["-p", "--output-format", "text"] },
+  codex:    { args: ["-q"] },
+  gemini:   { args: ["-p"] },
+  opencode: { args: ["-p"] },
+};
+
 export function executeCliAgent(
   cliPath: string,
   prompt: string,
-  timeoutMs: number
+  timeoutMs: number,
+  agentType: CliAgentType = "claude"
 ): Promise<CliResult> {
   return new Promise((resolve, reject) => {
-    const proc = spawn(cliPath, ["-p", "--output-format", "text"], {
+    const config = cliConfigs[agentType] || cliConfigs.claude;
+    const proc = spawn(cliPath, config.args, {
       stdio: ["pipe", "pipe", "pipe"],
     });
 

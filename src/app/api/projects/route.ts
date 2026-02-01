@@ -3,6 +3,12 @@ import { createProjectRepository } from "../../../repositories/project_repositor
 import { createAgentRunner } from "../../../controllers/agent_runner";
 import { createWorkflowController } from "../../../controllers/workflow_controller";
 
+export async function GET() {
+  const repo = createProjectRepository();
+  const projects = repo.listProjects();
+  return NextResponse.json({ status: "ok", data: projects });
+}
+
 export async function POST(request: Request) {
   const body = await request.json();
   const theme = String(body.theme || "");

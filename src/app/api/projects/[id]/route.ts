@@ -17,3 +17,20 @@ export async function GET(
     );
   }
 }
+
+export async function DELETE(
+  _: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  const { id } = await context.params;
+  const repo = createProjectRepository();
+  try {
+    repo.deleteProject(id);
+    return NextResponse.json({ status: "ok", message: "deleted" });
+  } catch {
+    return NextResponse.json(
+      { status: "error", message: "project not found" },
+      { status: 404 }
+    );
+  }
+}

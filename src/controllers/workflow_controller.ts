@@ -37,6 +37,24 @@ export type WorkflowController = {
   complete: (id: string) => { status: ProjectStatus; messages: ChatMessage[] };
 };
 
+export class TransitionError extends Error {
+  currentStatus: string;
+  action: string;
+  constructor(currentStatus: string, action: string) {
+    super(`Cannot ${action} in status "${currentStatus}"`);
+    this.currentStatus = currentStatus;
+    this.action = action;
+  }
+}
+
+const allowedTransitions: Record<string, string[]> = {
+  runResearch: ["idea"],
+  generateOutline: ["research"],
+  generateDraft: ["outline", "review"],
+  applyReview: ["draft"],
+  complete: ["review"],
+};
+
 function createMessage(role: ChatMessage["role"], content: string): ChatMessage {
   return { role: role, content: content, timestamp: new Date().toISOString() };
 }
@@ -65,6 +83,14 @@ export function createWorkflowController(
     const msg = createMessage("system", content);
     repo.appendMessage(id, msg);
     return repo.loadMessages(id);
+  }
+
+  function guardTransition(id: string, action: string) {
+    const project = repo.loadProject(id);
+    const allowed = allowedTransitions[action];
+    if (allowed && !allowed.includes(project.status)) {
+      throw new TransitionError(project.status, action);
+    }
   }
 
   return {
@@ -100,6 +126,7 @@ export function createWorkflowController(
       return repo.loadMessages(id);
     },
     runResearch: async function (id) {
+      guardTransition(id, "runResearch");
       const payload = await runner.runAgent("research", "web_research", { projectId: id });
       repo.saveArtifact(id, "research", payload);
       const status = updateStatus(id, "research");
@@ -107,6 +134,7 @@ export function createWorkflowController(
       return { status: status, researchSummary: payload, messages: messages };
     },
     generateOutline: async function (id) {
+      guardTransition(id, "generateOutline");
       const payload = await runner.runAgent("outline", "create_outline", { projectId: id });
       repo.saveArtifact(id, "outline", payload);
       const status = updateStatus(id, "outline");
@@ -114,13 +142,24 @@ export function createWorkflowController(
       return { status: status, outlineMarkdown: payload, messages: messages };
     },
     generateDraft: async function (id) {
-      const payload = await runner.runAgent("draft", "create_draft", { projectId: id });
+      guardTransition(id, "generateDraft");
+      const project = repo.loadProject(id);
+      let payload: string;
+      let systemMsg: string;
+      if (project.status === "review") {
+        payload = await runner.runAgent("draft", "redraft", { projectId: id });
+        systemMsg = "レビューを反映した原稿を再生成しました。";
+      } else {
+        payload = await runner.runAgent("draft", "create_draft", { projectId: id });
+        systemMsg = "原稿が作成されました。";
+      }
       repo.saveArtifact(id, "draft", payload);
       const status = updateStatus(id, "draft");
-      const messages = addSystemMessage(id, "原稿が作成されました。");
+      const messages = addSystemMessage(id, systemMsg);
       return { status: status, draftMarkdown: payload, messages: messages };
     },
     applyReview: async function (id, feedback) {
+      guardTransition(id, "applyReview");
       const payload = await runner.runAgent("review", "apply_review", {
         projectId: id,
         feedback: feedback,
@@ -131,6 +170,7 @@ export function createWorkflowController(
       return { status: status, updatedDraft: payload, messages: messages };
     },
     complete: function (id) {
+      guardTransition(id, "complete");
       const status = updateStatus(id, "done");
       const messages = addSystemMessage(id, "記事が完成しました。");
       return { status: status, messages: messages };

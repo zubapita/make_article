@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createProjectRepository } from "../../../../../repositories/project_repository";
 import { createAgentRunner } from "../../../../../controllers/agent_runner";
-import { createWorkflowController } from "../../../../../controllers/workflow_controller";
+import { createWorkflowController, TransitionError } from "../../../../../controllers/workflow_controller";
 
 export async function POST(
   request: Request,
@@ -14,15 +14,28 @@ export async function POST(
     return NextResponse.json({ status: "error", message: "feedback is required" }, { status: 400 });
   }
 
-  const repo = createProjectRepository();
-  const runner = createAgentRunner();
-  const controller = createWorkflowController(repo, runner);
-  const result = await controller.applyReview(id, feedback);
+  try {
+    const repo = createProjectRepository();
+    const runner = createAgentRunner();
+    const controller = createWorkflowController(repo, runner);
+    const result = await controller.applyReview(id, feedback);
 
-  return NextResponse.json({
-    status: result.status,
-    projectId: id,
-    data: { updatedDraft: result.updatedDraft },
-    messages: result.messages,
-  });
+    return NextResponse.json({
+      status: result.status,
+      projectId: id,
+      data: { updatedDraft: result.updatedDraft },
+      messages: result.messages,
+    });
+  } catch (err) {
+    if (err instanceof TransitionError) {
+      return NextResponse.json(
+        { status: "error", message: err.message, currentStatus: err.currentStatus },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json(
+      { status: "error", message: err instanceof Error ? err.message : "unknown error" },
+      { status: 500 }
+    );
+  }
 }

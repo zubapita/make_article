@@ -82,3 +82,81 @@ test("workflow_controller runs minimal flow with mock runner", async () => {
     assert.ok(fs.existsSync(path.join(projectPath, "messages.json")));
   });
 });
+
+import { TransitionError } from "../src/controllers/workflow_controller";
+
+function createTestRepo() {
+  const repoModule = require("../src/repositories/project_repository");
+  return repoModule.createProjectRepository();
+}
+
+test("TransitionError: idea → outline is rejected", async () => {
+  await withTempCwd(async () => {
+    const repo = createTestRepo();
+    const mockRunner = createMockRunner();
+    const controllerModule = await import("../src/controllers/workflow_controller");
+    const controller = controllerModule.createWorkflowController(repo, mockRunner);
+    const project = controller.startProject("test theme");
+
+    try {
+      await controller.generateOutline(project.id);
+      assert.fail("should have thrown TransitionError");
+    } catch (err) {
+      assert.ok(err instanceof TransitionError);
+      assert.strictEqual((err as TransitionError).currentStatus, "idea");
+    }
+  });
+});
+
+test("TransitionError: idea → draft is rejected", async () => {
+  await withTempCwd(async () => {
+    const repo = createTestRepo();
+    const mockRunner = createMockRunner();
+    const controllerModule = await import("../src/controllers/workflow_controller");
+    const controller = controllerModule.createWorkflowController(repo, mockRunner);
+    const project = controller.startProject("test theme");
+
+    try {
+      await controller.generateDraft(project.id);
+      assert.fail("should have thrown TransitionError");
+    } catch (err) {
+      assert.ok(err instanceof TransitionError);
+    }
+  });
+});
+
+test("TransitionError: idea → complete is rejected", async () => {
+  await withTempCwd(async () => {
+    const repo = createTestRepo();
+    const mockRunner = createMockRunner();
+    const controllerModule = await import("../src/controllers/workflow_controller");
+    const controller = controllerModule.createWorkflowController(repo, mockRunner);
+    const project = controller.startProject("test theme");
+
+    try {
+      controller.complete(project.id);
+      assert.fail("should have thrown TransitionError");
+    } catch (err) {
+      assert.ok(err instanceof TransitionError);
+    }
+  });
+});
+
+test("TransitionError: done → all operations rejected", async () => {
+  await withTempCwd(async () => {
+    const repo = createTestRepo();
+    const mockRunner = createMockRunner();
+    const controllerModule = await import("../src/controllers/workflow_controller");
+    const controller = controllerModule.createWorkflowController(repo, mockRunner);
+    const project = controller.startProject("test theme");
+    // Manually set status to done
+    repo.saveProject({ ...project, status: "done" });
+
+    try {
+      await controller.runResearch(project.id);
+      assert.fail("should have thrown");
+    } catch (err) {
+      assert.ok(err instanceof TransitionError);
+    }
+  });
+});

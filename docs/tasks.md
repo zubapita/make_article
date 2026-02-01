@@ -4,8 +4,8 @@
 - [x] ルート構成の決定 (Web UI / Next.js App Router)
 - [x] Next.js App Router の最小構成を作成
 - [x] ポート3000の起動確認 (占有時は停止してから起動)
-- [ ] CLIエージェント呼び出しの最小実装
-- [ ] プロジェクトディレクトリ生成ロジック
+- [x] CLIエージェント呼び出しの最小実装
+- [x] プロジェクトディレクトリ生成ロジック
 
 ## モデル実装
 - [x] ArticleProject モデル作成
@@ -43,3 +43,18 @@
 
 ## API
 - [x] Next.js API ルートの最小スタブ作成
+
+## Contract 実装
+- [x] Contract 01: 状態遷移ガード (TransitionError, allowedTransitions, guardTransition)
+- [x] Contract 02: プロジェクト一覧API (GET /api/projects)
+- [x] Contract 03: マルチCLIエージェント対応 (claude/codex/gemini/opencode)
+- [x] Contract 04: Review → Draft 差し戻し (redraft タスク)
+- [x] Contract 05: プロジェクト削除 (DELETE /api/projects/[id])
+- [x] Contract 06: XSSサニタイズ検証 (marked + DOMPurify テスト)
+- [x] Contract 07: SKILLテンプレート外部化 (skills/*.md + loadTemplate/renderTemplate)
+- [x] Contract 08: 商用品質プロンプト改善 (品質基準・チェックリスト追加)
+
+## 自動テスト
+- [x] ユニットテスト 38件パス (controller, repository, agent_runner, sanitize)
+- [x] E2Eテスト 28件パス (全APIエンドポイント + ワークフロー)
+- [x] ビルド成功 (npm run build)

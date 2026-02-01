@@ -1,6 +1,6 @@
 import { loadProjectContext } from "./context_loader";
 import { searchWeb } from "./search_client";
-import { executeCliAgent } from "./cli_executor";
+import { executeCliAgent, CliAgentType } from "./cli_executor";
 import { ChatMessage } from "../models/chat_message";
 import {
   openingPrompt,
@@ -9,6 +9,7 @@ import {
   outlinePrompt,
   draftPrompt,
   reviewPrompt,
+  redraftPrompt,
 } from "./prompt_templates";
 
 export type AgentRunner = {
@@ -19,6 +20,7 @@ export function createAgentRunner(): AgentRunner {
   const cliPath = process.env.CLAUDE_CLI_PATH || "claude";
   const timeoutMs = Number(process.env.AGENT_TIMEOUT_MS) || 300000;
   const tavilyKey = process.env.TAVILY_API_KEY || "";
+  const agentType = (process.env.CLI_AGENT_TYPE || "claude") as CliAgentType;
 
   return {
     runAgent: async function (_agentName, task, inputs) {
@@ -27,7 +29,7 @@ export function createAgentRunner(): AgentRunner {
       if (task === "opening") {
         const ctx = loadProjectContext(projectId, ["theme"]);
         const prompt = openingPrompt(ctx.theme);
-        const result = await executeCliAgent(cliPath, prompt, timeoutMs);
+        const result = await executeCliAgent(cliPath, prompt, timeoutMs, agentType);
         return result.stdout;
       }
 
@@ -36,7 +38,7 @@ export function createAgentRunner(): AgentRunner {
         const messagesJson = inputs._messagesJson || "[]";
         const messages: ChatMessage[] = JSON.parse(messagesJson);
         const prompt = discussionPrompt(ctx.theme, messages);
-        const result = await executeCliAgent(cliPath, prompt, timeoutMs);
+        const result = await executeCliAgent(cliPath, prompt, timeoutMs, agentType);
         return result.stdout;
       }
 
@@ -44,21 +46,21 @@ export function createAgentRunner(): AgentRunner {
         const ctx = loadProjectContext(projectId, ["theme", "discussion"]);
         const searchResults = await searchWeb(ctx.theme, tavilyKey, 5);
         const prompt = researchPrompt(ctx.theme, ctx.discussion, searchResults);
-        const result = await executeCliAgent(cliPath, prompt, timeoutMs);
+        const result = await executeCliAgent(cliPath, prompt, timeoutMs, agentType);
         return result.stdout;
       }
 
       if (task === "create_outline") {
         const ctx = loadProjectContext(projectId, ["theme", "discussion", "research"]);
         const prompt = outlinePrompt(ctx.theme, ctx.discussion, ctx.research);
-        const result = await executeCliAgent(cliPath, prompt, timeoutMs);
+        const result = await executeCliAgent(cliPath, prompt, timeoutMs, agentType);
         return result.stdout;
       }
 
       if (task === "create_draft") {
         const ctx = loadProjectContext(projectId, ["theme", "outline", "research"]);
         const prompt = draftPrompt(ctx.theme, ctx.outline, ctx.research);
-        const result = await executeCliAgent(cliPath, prompt, timeoutMs);
+        const result = await executeCliAgent(cliPath, prompt, timeoutMs, agentType);
         return result.stdout;
       }
 
@@ -66,7 +68,26 @@ export function createAgentRunner(): AgentRunner {
         const ctx = loadProjectContext(projectId, ["theme", "draft"]);
         const feedback = inputs.feedback || "";
         const prompt = reviewPrompt(ctx.theme, ctx.draft, feedback);
-        const result = await executeCliAgent(cliPath, prompt, timeoutMs);
+        const result = await executeCliAgent(cliPath, prompt, timeoutMs, agentType);
+        return result.stdout;
+      }
+
+      if (task === "redraft") {
+        const ctx = loadProjectContext(projectId, [
+          "theme",
+          "outline",
+          "research",
+          "draft",
+          "review",
+        ]);
+        const prompt = redraftPrompt(
+          ctx.theme,
+          ctx.outline,
+          ctx.research,
+          ctx.draft,
+          ctx.review
+        );
+        const result = await executeCliAgent(cliPath, prompt, timeoutMs, agentType);
         return result.stdout;
       }
 

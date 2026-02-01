@@ -8,6 +8,8 @@ elif echo "$INPUT" | grep -q "research analyst"; then
   echo "mock-research: ## リサーチ結果"
 elif echo "$INPUT" | grep -q "article planner"; then
   echo "mock-outline: ## 1. はじめに"
+elif echo "$INPUT" | grep -q "Rewrite the article draft"; then
+  echo "mock-redraft: # 改訂版原稿"
 elif echo "$INPUT" | grep -q "article writer"; then
   echo "mock-draft: # 記事タイトル"
 elif echo "$INPUT" | grep -q "experienced editor"; then

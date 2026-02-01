@@ -1,11 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+type ProjectSummary = {
+  id: string;
+  theme: string;
+  status: string;
+  updatedAt: string;
+};
+
+const statusLabels: Record<string, string> = {
+  idea: "議論中",
+  research: "リサーチ済",
+  outline: "構成案済",
+  draft: "原稿済",
+  review: "レビュー済",
+  done: "完了",
+};
 
 export default function HomePage() {
   const [theme, setTheme] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+
+  useEffect(() => {
+    fetch("/api/projects")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.data) setProjects(data.data);
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -54,6 +80,19 @@ export default function HomePage() {
           {isSubmitting ? "作成中..." : "開始"}
         </button>
       </form>
+      {projects.length > 0 && (
+        <section className="project-list">
+          <h2>既存プロジェクト</h2>
+          {projects.map((p) => (
+            <a key={p.id} href={`/projects/${p.id}`} className="card project-card">
+              <strong>{p.theme}</strong>
+              <span className="project-meta">
+                {statusLabels[p.status] || p.status} ・ {new Date(p.updatedAt).toLocaleDateString("ja-JP")}
+              </span>
+            </a>
+          ))}
+        </section>
+      )}
     </main>
   );
 }

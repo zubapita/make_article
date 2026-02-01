@@ -39,6 +39,8 @@ export type ProjectRepository = {
   saveArtifact: (id: string, type: ArtifactType, markdown: string) => void;
   loadMessages: (id: string) => ChatMessage[];
   appendMessage: (id: string, message: ChatMessage) => void;
+  listProjects: () => ArticleProject[];
+  deleteProject: (id: string) => void;
 };
 
 const baseDir = process.env.PROJECTS_BASE_DIR || path.join(process.cwd(), "projects");
@@ -104,6 +106,31 @@ export function createProjectRepository(): ProjectRepository {
         : [];
       messages.push(message);
       atomicWriteFile(filePath, JSON.stringify(messages, null, 2));
+    },
+    listProjects: function () {
+      if (!fs.existsSync(baseDir)) return [];
+      const entries = fs.readdirSync(baseDir, { withFileTypes: true });
+      const projects: ArticleProject[] = [];
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const metaPath = path.join(baseDir, entry.name, "metadata.json");
+        if (!fs.existsSync(metaPath)) continue;
+        try {
+          const data = fs.readFileSync(metaPath, "utf-8");
+          projects.push(JSON.parse(data) as ArticleProject);
+        } catch {
+          // skip invalid
+        }
+      }
+      projects.sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+      return projects;
+    },
+    deleteProject: function (id) {
+      const dir = projectDir(id);
+      if (!fs.existsSync(dir)) {
+        throw new Error(`Project not found: ${id}`);
+      }
+      fs.rmSync(dir, { recursive: true, force: true });
     },
   };
 }

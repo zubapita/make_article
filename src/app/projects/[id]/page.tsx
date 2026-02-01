@@ -152,6 +152,21 @@ export default function ProjectPage() {
     generate();
   }, [projectId, openingDone, loading, messages.length]);
 
+  async function handleDelete() {
+    if (!projectId) return;
+    if (!window.confirm("このプロジェクトを削除しますか？")) return;
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, { method: "DELETE" });
+      if (res.ok) {
+        router.push("/");
+      } else {
+        setError("削除に失敗しました。");
+      }
+    } catch {
+      setError("通信に失敗しました。");
+    }
+  }
+
   async function sendMessage() {
     if (!projectId || !input.trim() || loading) return;
     setError("");
@@ -271,6 +286,13 @@ export default function ProjectPage() {
           type="button"
         >
           成果物
+        </button>
+        <button
+          className="delete-btn"
+          onClick={handleDelete}
+          type="button"
+        >
+          削除
         </button>
       </header>
 

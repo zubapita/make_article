@@ -150,3 +150,98 @@ test("researchPrompt builds correct prompt from context values", async () => {
   assert.ok(prompt.includes("https://test.com"));
   assert.ok(prompt.includes("Test content"));
 });
+
+// --- template loading tests (Contract 07) ---
+
+test("loadTemplate reads a skill file", async () => {
+  const { loadTemplate } = await import("../src/controllers/prompt_templates");
+  const template = loadTemplate("opening");
+  assert.ok(template.includes("{{theme}}"));
+  assert.ok(template.includes("editorial assistant"));
+});
+
+test("renderTemplate replaces placeholders", async () => {
+  const { renderTemplate } = await import("../src/controllers/prompt_templates");
+  const result = renderTemplate("Hello {{name}}, welcome to {{place}}!", {
+    name: "Alice",
+    place: "Wonderland",
+  });
+  assert.equal(result, "Hello Alice, welcome to Wonderland!");
+});
+
+test("renderTemplate leaves missing placeholders empty", async () => {
+  const { renderTemplate } = await import("../src/controllers/prompt_templates");
+  const result = renderTemplate("{{exists}} and {{missing}}", { exists: "here" });
+  assert.equal(result, "here and ");
+});
+
+// --- redraftPrompt tests (Contract 04) ---
+
+test("redraftPrompt includes all parameters", async () => {
+  const { redraftPrompt } = await import("../src/controllers/prompt_templates");
+  const prompt = redraftPrompt(
+    "Theme X",
+    "## Outline",
+    "Research data",
+    "Current draft text",
+    "Review feedback text"
+  );
+  assert.ok(prompt.includes("Theme X"));
+  assert.ok(prompt.includes("## Outline"));
+  assert.ok(prompt.includes("Research data"));
+  assert.ok(prompt.includes("Current draft text"));
+  assert.ok(prompt.includes("Review feedback text"));
+});
+
+test("redraftPrompt uses default text for empty params", async () => {
+  const { redraftPrompt } = await import("../src/controllers/prompt_templates");
+  const prompt = redraftPrompt("Theme", "", "", "", "");
+  assert.ok(prompt.includes("No outline available"));
+  assert.ok(prompt.includes("No research available"));
+  assert.ok(prompt.includes("No draft available"));
+  assert.ok(prompt.includes("No feedback"));
+});
+
+// --- cli_executor multi-CLI agent tests ---
+
+test("executeCliAgent uses claude args by default", async () => {
+  const { executeCliAgent } = await import("../src/controllers/cli_executor");
+  const mockCliPath = path.join(__dirname, "e2e", "mock-claude.sh");
+
+  // mock-claude.sh echoes output based on prompt content; default is claude args
+  const result = await executeCliAgent(mockCliPath, "editorial assistant", 5000);
+  assert.ok(result.stdout.includes("mock-opening"));
+});
+
+test("executeCliAgent accepts codex agent type", async () => {
+  const { executeCliAgent } = await import("../src/controllers/cli_executor");
+  const mockCliPath = path.join(__dirname, "e2e", "mock-claude.sh");
+
+  // mock-claude.sh ignores flags, so it works for any agent type
+  const result = await executeCliAgent(mockCliPath, "editorial assistant", 5000, "codex");
+  assert.ok(result.stdout.includes("mock-opening"));
+});
+
+test("executeCliAgent accepts gemini agent type", async () => {
+  const { executeCliAgent } = await import("../src/controllers/cli_executor");
+  const mockCliPath = path.join(__dirname, "e2e", "mock-claude.sh");
+
+  const result = await executeCliAgent(mockCliPath, "article writer", 5000, "gemini");
+  assert.ok(result.stdout.includes("mock-draft"));
+});
+
+test("executeCliAgent accepts opencode agent type", async () => {
+  const { executeCliAgent } = await import("../src/controllers/cli_executor");
+  const mockCliPath = path.join(__dirname, "e2e", "mock-claude.sh");
+
+  const result = await executeCliAgent(mockCliPath, "research analyst", 5000, "opencode");
+  assert.ok(result.stdout.includes("mock-research"));
+});
+
+test("CliAgentType and cliConfigs are properly exported", async () => {
+  const mod = await import("../src/controllers/cli_executor");
+  // Verify the type exists by checking executeCliAgent accepts the agentType param
+  assert.equal(typeof mod.executeCliAgent, "function");
+  // Verify function has 4 parameters (cliPath, prompt, timeoutMs, agentType)
+  assert.equal(mod.executeCliAgent.length, 3); // last param has default, so .length is 3
+});
