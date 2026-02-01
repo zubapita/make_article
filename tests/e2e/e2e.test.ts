@@ -3,7 +3,7 @@ import assert from "node:assert";
 import fs from "node:fs";
 import path from "node:path";
 import { setupE2E, E2EContext } from "./setup";
-import { postJson, getJson, getText } from "./helpers";
+import { postJson, getJson, getText, deleteJson } from "./helpers";
 
 let ctx: E2EContext;
 let projectId: string;
@@ -265,5 +265,142 @@ describe("E2E: Full workflow", () => {
     const res = await getJson("/api/projects/nonexistent-project/messages");
     assert.strictEqual(res.status, 200);
     assert.deepStrictEqual(res.data.messages, []);
+  });
+
+  // ─── State Transition Guard (4) ──────────────────────────────
+
+  it("29. idea → outline returns 400", async () => {
+    const create = await postJson("/api/projects", { theme: "遷移ガードテスト" });
+    const pid = create.data.projectId;
+    const res = await postJson(`/api/projects/${pid}/outline`, {});
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res.data.status, "error");
+    assert.ok(res.data.currentStatus, "should include currentStatus");
+  });
+
+  it("30. idea → draft returns 400", async () => {
+    const create = await postJson("/api/projects", { theme: "遷移ガードテスト2" });
+    const pid = create.data.projectId;
+    const res = await postJson(`/api/projects/${pid}/draft`, {});
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res.data.status, "error");
+  });
+
+  it("31. idea → review returns 400", async () => {
+    const create = await postJson("/api/projects", { theme: "遷移ガードテスト3" });
+    const pid = create.data.projectId;
+    const res = await postJson(`/api/projects/${pid}/review`, {
+      feedback: "テストフィードバック",
+    });
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res.data.status, "error");
+  });
+
+  it("32. idea → complete returns 400", async () => {
+    const create = await postJson("/api/projects", { theme: "遷移ガードテスト4" });
+    const pid = create.data.projectId;
+    const res = await postJson(`/api/projects/${pid}/complete`, {});
+    assert.strictEqual(res.status, 400);
+    assert.strictEqual(res.data.status, "error");
+  });
+
+  // ─── Project List (2) ────────────────────────────────────────
+
+  it("33. GET /api/projects returns project list", async () => {
+    const res = await getJson("/api/projects");
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.data.status, "ok");
+    assert.ok(Array.isArray(res.data.data), "data should be an array");
+    assert.ok(res.data.data.length > 0, "should have at least one project");
+  });
+
+  it("34. Project list includes the main project", async () => {
+    const res = await getJson("/api/projects");
+    const found = res.data.data.find(
+      (p: { id: string }) => p.id === projectId
+    );
+    assert.ok(found, "main project should be in the list");
+    assert.strictEqual(found.status, "done");
+  });
+
+  // ─── Review → Draft Rollback (3) ─────────────────────────────
+
+  it("35. review → draft (redraft) succeeds", async () => {
+    // Create a project and advance to review
+    const create = await postJson("/api/projects", { theme: "差し戻しテスト" });
+    const pid = create.data.projectId;
+    await postJson(`/api/projects/${pid}/research`, {});
+    await postJson(`/api/projects/${pid}/outline`, {});
+    await postJson(`/api/projects/${pid}/draft`, {});
+    await postJson(`/api/projects/${pid}/review`, {
+      feedback: "初回レビュー",
+    });
+
+    // Now rollback: review → draft via redraft
+    const res = await postJson(`/api/projects/${pid}/draft`, {});
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.data.status, "draft");
+    assert.ok(
+      res.data.data.draftMarkdown.includes("mock-redraft"),
+      "redraft should contain mock-redraft"
+    );
+  });
+
+  it("36. Redraft artifact overwrites draft file", async () => {
+    // Create a project, go through full cycle with rollback
+    const create = await postJson("/api/projects", { theme: "成果物上書きテスト" });
+    const pid = create.data.projectId;
+    await postJson(`/api/projects/${pid}/research`, {});
+    await postJson(`/api/projects/${pid}/outline`, {});
+    await postJson(`/api/projects/${pid}/draft`, {});
+    await postJson(`/api/projects/${pid}/review`, { feedback: "修正指示" });
+    await postJson(`/api/projects/${pid}/draft`, {}); // redraft
+
+    // Check artifact via API
+    const res = await getText(`/api/projects/${pid}/artifact?type=draft`);
+    assert.strictEqual(res.status, 200);
+    assert.ok(
+      res.text.includes("mock-redraft"),
+      "draft artifact should contain redraft content"
+    );
+  });
+
+  it("37. Full rollback cycle: review → draft → review → complete", async () => {
+    const create = await postJson("/api/projects", { theme: "フルサイクルテスト" });
+    const pid = create.data.projectId;
+    await postJson(`/api/projects/${pid}/research`, {});
+    await postJson(`/api/projects/${pid}/outline`, {});
+    await postJson(`/api/projects/${pid}/draft`, {});
+    await postJson(`/api/projects/${pid}/review`, { feedback: "初回レビュー" });
+    await postJson(`/api/projects/${pid}/draft`, {}); // redraft
+    await postJson(`/api/projects/${pid}/review`, { feedback: "最終レビュー" });
+    const res = await postJson(`/api/projects/${pid}/complete`, {});
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.data.status, "done");
+  });
+
+  // ─── Project Delete (3) ──────────────────────────────────────
+
+  it("38. DELETE /api/projects/[id] returns ok", async () => {
+    const create = await postJson("/api/projects", { theme: "削除テスト" });
+    const pid = create.data.projectId;
+    const res = await deleteJson(`/api/projects/${pid}`);
+    assert.strictEqual(res.status, 200);
+    assert.strictEqual(res.data.status, "ok");
+  });
+
+  it("39. GET after DELETE returns 404", async () => {
+    const create = await postJson("/api/projects", { theme: "削除後確認テスト" });
+    const pid = create.data.projectId;
+    await deleteJson(`/api/projects/${pid}`);
+    const res = await getJson(`/api/projects/${pid}`);
+    assert.strictEqual(res.status, 404);
+    assert.strictEqual(res.data.status, "error");
+  });
+
+  it("40. DELETE non-existent project returns 404", async () => {
+    const res = await deleteJson("/api/projects/nonexistent-delete-test");
+    assert.strictEqual(res.status, 404);
+    assert.strictEqual(res.data.status, "error");
   });
 });

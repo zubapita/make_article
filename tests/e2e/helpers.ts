@@ -29,6 +29,14 @@ export async function getText(path: string) {
   };
 }
 
+export async function deleteJson(path: string) {
+  const res = await fetch(`${BASE}${path}`, { method: "DELETE" });
+  return {
+    status: res.status,
+    data: await res.json(),
+  };
+}
+
 export async function waitForServer(maxMs: number = 60000) {
   const start = Date.now();
   while (Date.now() - start < maxMs) {
